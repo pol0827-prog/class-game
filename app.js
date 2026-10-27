@@ -66,7 +66,7 @@ async function startTeacher() {
 function renderShell() {
   $('#app').innerHTML = `
   <header class="top">
-    <div class="logo"><div class="mark">⏱️</div><div><h1>수업이 재밌어지는 5분</h1><small>CLASS OPENER · 고1–고3 교실 게임</small></div></div>
+    <div class="logo"><div class="mark">⏱️</div><div><h1>수업이 재밌어지는 5분</h1><small>재이미나는 수업 흥미 유발 게임 앱</small></div></div>
     <div class="tools">
       <button class="btn" id="b-room">📱 학생 참여</button>
       <button class="btn" id="b-pick">👤 이름 뽑기</button>
@@ -580,14 +580,23 @@ function playTune(name, startSec, dur) {
   return true;
 }
 
-MOD.song = (stage, g, items) => {
+const PRACTICE_SONGS = ['작은 별 | 동요 | tune:star', '나비야 | 동요 | tune:nabi', '아리랑 | 민요 | tune:arirang'].join('\n');
+MOD.song = (stage, g, myItems) => {
+  const practice = !!S.songPractice;
+  const items = practice ? parseLines('song', PRACTICE_SONGS) : myItems;
   let idx = 0, part = 1, showA = false, bz = null, player = null, playerId = '', stopT = null, audio = null;
   let clip = LS.get('co-song-clip', 5);
-  stage.innerHTML = `<div class="qcard" id="qc"></div>
+  stage.innerHTML = `<div class="row" style="justify-content:center">
+      <button class="tab ${practice ? '' : 'on'}" data-mode="mine">🎵 내 노래 목록</button>
+      <button class="tab ${practice ? 'on' : ''}" data-mode="practice">🎹 연습 게임 (바로 재생)</button>
+    </div>
+    ${practice ? '<p class="sub" style="margin:0">작은 별 · 나비야 · 아리랑 — 음원 없이 바로 들을 수 있는 연습용이에요. 게임 방법을 익혀 보세요!</p>' : ''}
+    <div class="qcard" id="qc"></div>
     <div class="songbox"><div class="ytwrap" id="ytw"><div id="yt"></div><div class="ytcover" id="ytc">🎵</div></div>
       <div class="songctl" id="sc"></div></div>
     <div class="ctrl" id="ctl"></div><div id="bz"></div>`;
   const qc = $('#qc', stage), ctl = $('#ctl', stage), sc = $('#sc', stage);
+  stage.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { S.songPractice = b.dataset.mode === 'practice'; sfx.whoosh(); renderModule(); });
   const cur = () => items[idx];
   const start = (it) => parseSec(it.start) ?? ytInfo(it.src)?.t ?? 0;
   let pendingSec = 0;
@@ -642,8 +651,8 @@ MOD.song = (stage, g, items) => {
       ${has ? '' : `<div class="help" style="text-align:center">🔇 이 노래에는 음원이 아직 없어요.<br>
         ① <a href="https://www.youtube.com/results?search_query=${encodeURIComponent(it.a + ' ' + (it.hint || ''))}" target="_blank" rel="noopener">유튜브에서 찾기</a> → 주소 복사 → [✏️ 내용 편집]에서 <b>제목 | 가수 | 유튜브 주소 | 시작 초</b>로 넣기
         &nbsp;또는 ② <label class="btn sm">🎵 음원 파일 올리기<input type="file" accept="audio/*" data-file hidden></label></div>`}
-      ${String(it.src || '').startsWith('tune:') ? '<div class="help" style="text-align:center">🎹 연습용 내장 멜로디예요. 진짜 노래는 유튜브 주소나 음원 파일로 넣어 주세요.</div>' : ''}
-      ${has && !S.songFiles[it.a] ? `<div class="row" style="justify-content:center"><label class="btn sm">🎵 음원 파일로 바꾸기<input type="file" accept="audio/*" data-file hidden></label></div>` : ''}`;
+      ${practice ? '<div class="help" style="text-align:center">🎹 연습용 내장 멜로디예요. 진짜 노래는 [🎵 내 노래 목록]에서 유튜브 주소나 음원 파일로 넣어 주세요.</div>' : ''}
+      ${has && !S.songFiles[it.a] && !practice ? `<div class="row" style="justify-content:center"><label class="btn sm">🎵 음원 파일로 바꾸기<input type="file" accept="audio/*" data-file hidden></label></div>` : ''}`;
     const cover = $('#ytc', stage); if (cover) cover.classList.toggle('off', showA);
     ctl.innerHTML = `<button class="btn big" data-go="-1">◀</button>
       <button class="btn big ${part === 1 ? 'primary' : ''}" data-part="1">1소절 (3점)</button>
