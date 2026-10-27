@@ -29,5 +29,5 @@ export const CONFIG = {
 
   // ③ 학생 접속 주소 (비워 두면 현재 주소를 자동 사용)
   //    예: 'https://class-opener.vercel.app'
-  publicUrl: '',
+  publicUrl: 'https://class-game-gilt.vercel.app',
 };

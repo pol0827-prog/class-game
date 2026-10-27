@@ -26,7 +26,7 @@ export const FORMATS = {
   truths:   { fields: ['문장1', '문장2', '문장3', '거짓 번호(1~3)'], example: '나는 방송부였다 | 매운 걸 못 먹는다 | 번지점프를 해 봤다 | 3' },
   chosung:  { fields: ['초성', '정답', '힌트'], example: 'ㅎㅁㅈㅇ | 훈민정음 | 1443년' },
   ox:       { fields: ['문장', 'O 또는 X', '해설'], example: '시의 화자는 곧 시인이다 | X | 화자는 시인이 내세운 목소리' },
-  song:     { fields: ['노래 제목', '가수·힌트'], example: '아리랑 | 민요' },
+  song:     { fields: ['노래 제목', '가수·힌트', '유튜브 주소(선택)', '시작 초(선택, 예: 0:45)'], example: '벚꽃 엔딩 | 버스커버스커 | https://youtu.be/영상주소 | 0:12' },
   liar:     { fields: ['카테고리', '제시어들(쉼표로 구분, 8개 이상)'], example: '문학 작품 | 춘향전, 심청전, 흥부전, 홍길동전, 토끼전, 운수 좋은 날, 소나기, 동백꽃' },
   kword:    { fields: ['정답 낱말(2~3글자)', '힌트'], example: '은유 | A는 B이다' },
   concept:  { fields: ['개념', '꼭 들어가야 할 말'], example: '공감적 듣기 | 상대 입장, 맞장구, 감정 읽기' },
@@ -179,13 +179,14 @@ export const GAMES = [
     summary: '노래 앞부분 한 소절로 제목을 맞히고, 못 맞히면 두 소절을 듣는다.',
     module: 'song', format: 'song', live: 'buzzer', timers: [10, 20, 30],
     steps: [
-      '선생님이 준비한 노래의 첫 소절만 들려줘요. (음원은 선생님 기기에서 재생)',
+      '[✏️ 내용 편집]에서 노래마다 유튜브 주소(와 시작 초)를 넣거나, 화면에서 음원 파일을 올려요.',
+      '[▶ 1소절]을 누르면 정해진 초만큼만 재생돼요. 영상 화면은 🎵로 가려져 있다가 정답 공개 때 보여요.',
       '정답을 알면 휴대폰 [버저]를 눌러요. 가장 먼저 누른 모둠이 말할 기회!',
       '1소절에 맞히면 3점, 2소절에 맞히면 1점.',
       '[정답 공개]로 제목을 확인해요.',
     ],
     tips: ['수업과 관련된 노래(시를 노랫말로 한 곡 등)를 섞으면 도입으로 훌륭해요.'],
-    lines: ['아리랑 | 민요', '곰 세 마리 | 동요', '학교 종 | 동요'].join('\n'),
+    lines: ['벚꽃 엔딩 | 버스커버스커', '밤양갱 | 비비', '좋은 날 | 아이유', '봄날 | 방탄소년단', 'Supernova | 에스파'].join('\n'),
   },
   {
     id: 'emoji', title: '이모지 퀴즈', cat: 'warm', time: '5분', people: '모둠',
@@ -533,7 +534,7 @@ export function parseLines(format, text) {
       case 'check':    out.push({ q: c[0] }); break;
       case 'truths':   out.push({ s: c.slice(0, 3), lie: Math.max(0, Math.min(2, (parseInt(c[3], 10) || 1) - 1)) }); break;
       case 'ox':       out.push({ q: c[0], a: (c[1] || 'O').toUpperCase().startsWith('X') ? 'X' : 'O', note: c[2] || '' }); break;
-      case 'song':     out.push({ a: c[0], hint: c[1] || '' }); break;
+      case 'song':     out.push({ a: c[0], hint: c[1] || '', src: c[2] || '', start: c[3] || '' }); break;
       case 'concept':  out.push({ q: c[0], a: c[1] || '' }); break;
       case 'liar':     out.push({ cat: c[0], words: (c[1] || '').split(',').map(s => s.trim()).filter(Boolean) }); break;
       case 'kword':    out.push({ a: c[0], hint: c[1] || '' }); break;

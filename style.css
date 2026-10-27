@@ -367,3 +367,11 @@ h1, h2, h3, .t { font-family: var(--title); font-weight: 400; letter-spacing: -.
 .kkeys { display: grid; gap: 6px; justify-items: center; }
 .kkeys > div { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
 .kk { min-width: 38px; padding: 8px 6px; border-radius: 8px; background: #EFE7DA; text-align: center; font-weight: 800; }
+
+/* song player */
+.songbox { display: grid; gap: 10px; justify-items: center; }
+.ytwrap { position: relative; width: min(360px, 90%); aspect-ratio: 16/9; border-radius: 16px; overflow: hidden; background: #1F1A2E; }
+.ytwrap > div:first-child, .ytwrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ytcover { position: absolute; inset: 0; display: grid; place-items: center; font-size: 4rem; background: linear-gradient(135deg, #6C4CF5, #EE4F86); color: #fff; z-index: 2; transition: opacity .4s; }
+.ytcover.off { opacity: 0; pointer-events: none; }
+.songctl { display: grid; gap: 8px; width: 100%; }

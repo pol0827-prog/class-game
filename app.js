@@ -527,27 +527,105 @@ MOD.keyword = (stage, g, items) => {
 };
 
 // ---------- 한 소절 듣고 제목 맞히기 ----------
+// 유튜브 주소 → 영상 ID / 시작 초
+function ytInfo(url) {
+  const u = String(url || '').trim(); if (!u) return null;
+  const m = u.match(/(?:youtu\.be\/|v=|shorts\/|embed\/|live\/)([A-Za-z0-9_-]{11})/) || (/^[A-Za-z0-9_-]{11}$/.test(u) ? [0, u] : null);
+  if (!m) return null;
+  const t = u.match(/[?&]t=(\d+)/);
+  return { id: m[1], t: t ? +t[1] : 0 };
+}
+function parseSec(v) { const s = String(v || '').trim(); if (!s) return null; if (s.includes(':')) { const [m, x] = s.split(':'); return (+m || 0) * 60 + (+x || 0); } return +s || 0; }
+let ytReady = null;
+function loadYT() {
+  if (window.YT?.Player) return Promise.resolve();
+  if (ytReady) return ytReady;
+  ytReady = new Promise((res, rej) => {
+    window.onYouTubeIframeAPIReady = () => res();
+    const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; sc.onerror = () => { ytReady = null; rej(new Error('유튜브를 불러오지 못했어요')); };
+    document.head.appendChild(sc);
+  });
+  return ytReady;
+}
+S.songFiles = S.songFiles || {};
+
 MOD.song = (stage, g, items) => {
-  let idx = 0, part = 1, showA = false, bz = null;
-  stage.innerHTML = `<div class="qcard" id="qc"></div><div class="ctrl" id="ctl"></div><div id="bz"></div>`;
-  const qc = $('#qc', stage), ctl = $('#ctl', stage);
+  let idx = 0, part = 1, showA = false, bz = null, player = null, playerId = '', stopT = null, audio = null;
+  let clip = LS.get('co-song-clip', 5);
+  stage.innerHTML = `<div class="qcard" id="qc"></div>
+    <div class="songbox"><div class="ytwrap" id="ytw"><div id="yt"></div><div class="ytcover" id="ytc">🎵</div></div>
+      <div class="songctl" id="sc"></div></div>
+    <div class="ctrl" id="ctl"></div><div id="bz"></div>`;
+  const qc = $('#qc', stage), ctl = $('#ctl', stage), sc = $('#sc', stage);
+  const cur = () => items[idx];
+  const start = (it) => parseSec(it.start) ?? ytInfo(it.src)?.t ?? 0;
+  function stop() { clearTimeout(stopT); try { player?.pauseVideo(); } catch {} audio?.pause(); }
+  addClean(() => { stop(); try { player?.destroy(); } catch {} });
+  async function play(sec) {
+    const it = cur(); if (!it) return; stop();
+    const st = start(it);
+    const file = S.songFiles[it.a];
+    if (file) {
+      audio = audio || new Audio(); if (audio.src !== file) audio.src = file;
+      audio.currentTime = st; await audio.play().catch(() => toast('재생이 막혔어요. 화면을 한 번 누른 뒤 다시 눌러 주세요'));
+      stopT = setTimeout(() => audio.pause(), sec * 1000); return;
+    }
+    const yi = ytInfo(it.src);
+    if (!yi) { toast('이 노래에는 음원이 없어요. 유튜브 주소를 넣거나 음원 파일을 올려 주세요'); return; }
+    try { await loadYT(); } catch (e) { toast(e.message); return; }
+    if (!player || playerId !== yi.id) {
+      try { player?.destroy(); } catch {}
+      $('#ytw', stage).innerHTML = `<div id="yt"></div><div class="ytcover ${showA ? 'off' : ''}" id="ytc">🎵</div>`;
+      playerId = yi.id;
+      await new Promise((res) => {
+        player = new YT.Player($('#yt', stage), { videoId: yi.id, width: '100%', height: '100%', playerVars: { controls: 0, disablekb: 1, modestbranding: 1, rel: 0, playsinline: 1, start: st },
+          events: { onReady: () => res(), onError: () => { toast('이 영상은 다른 사이트에서 재생할 수 없게 막혀 있어요. 다른 영상 주소를 넣어 주세요'); res(); } } });
+      });
+    }
+    try { player.seekTo(st, true); player.playVideo(); } catch {}
+    stopT = setTimeout(() => { try { player.pauseVideo(); } catch {} }, sec * 1000 + 600);
+  }
   function draw() {
-    const it = items[idx];
-    if (!it) { qc.innerHTML = '<div class="empty">노래 목록이 비어 있어요. [내용 편집]에서 추가하세요.</div>'; return; }
+    const it = cur();
+    if (!it) { qc.innerHTML = '<div class="empty">노래 목록이 비어 있어요. [✏️ 내용 편집]에서 추가하세요.</div>'; return; }
+    const has = !!(S.songFiles[it.a] || ytInfo(it.src));
     qc.innerHTML = `<div class="counter">🎵 노래 ${idx + 1} / ${items.length}</div>
-      <div class="q">${showA ? esc(it.a) : (part === 1 ? '🎧 첫 소절 듣는 중' : '🎧🎧 두 소절 듣는 중')}</div>
+      <div class="q">${showA ? esc(it.a) : (part === 1 ? '🎧 첫 소절 듣고 맞히기' : '🎧🎧 두 소절 듣고 맞히기')}</div>
       ${showA && it.hint ? `<div class="hint">${esc(it.hint)}</div>` : `<div class="sub">${part === 1 ? '지금 맞히면 3점!' : '지금 맞히면 1점'}</div>`}`;
+    sc.innerHTML = `
+      <div class="row" style="justify-content:center">
+        <button class="btn huge primary" data-play="1" ${has ? '' : 'disabled'}>▶ 1소절 (${clip}초)</button>
+        <button class="btn big" data-play="2" ${has ? '' : 'disabled'}>▶▶ 2소절 (${clip * 2}초)</button>
+        <button class="btn big" data-stop>⏹</button>
+      </div>
+      <div class="row" style="justify-content:center"><span class="chip">한 소절 길이</span>${[3, 5, 8, 10].map(n => `<button class="btn sm ${n === clip ? 'primary' : ''}" data-clip="${n}">${n}초</button>`).join('')}
+        <span class="chip">시작 ${start(it)}초</span></div>
+      ${has ? '' : `<div class="help" style="text-align:center">🔇 이 노래에는 음원이 아직 없어요.<br>
+        ① <a href="https://www.youtube.com/results?search_query=${encodeURIComponent(it.a + ' ' + (it.hint || ''))}" target="_blank" rel="noopener">유튜브에서 찾기</a> → 주소 복사 → [✏️ 내용 편집]에서 <b>제목 | 가수 | 유튜브 주소 | 시작 초</b>로 넣기
+        &nbsp;또는 ② <label class="btn sm">🎵 음원 파일 올리기<input type="file" accept="audio/*" data-file hidden></label></div>`}
+      ${has && !S.songFiles[it.a] ? `<div class="row" style="justify-content:center"><label class="btn sm">🎵 음원 파일로 바꾸기<input type="file" accept="audio/*" data-file hidden></label></div>` : ''}`;
+    const cover = $('#ytc', stage); if (cover) cover.classList.toggle('off', showA);
     ctl.innerHTML = `<button class="btn big" data-go="-1">◀</button>
       <button class="btn big ${part === 1 ? 'primary' : ''}" data-part="1">1소절 (3점)</button>
       <button class="btn big ${part === 2 ? 'primary' : ''}" data-part="2">2소절 (1점)</button>
       <button class="btn big" data-a ${showA ? 'disabled' : ''}>정답 공개</button>
       <button class="btn big" data-go="1">▶</button>`;
   }
+  sc.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.play) { part = Math.max(part, +b.dataset.play); play(clip * +b.dataset.play); draw(); bz?.draw(); }
+    if ('stop' in b.dataset) stop();
+    if (b.dataset.clip) { clip = +b.dataset.clip; LS.set('co-song-clip', clip); draw(); }
+  });
+  sc.addEventListener('change', (e) => {
+    const f = e.target.closest('[data-file]')?.files?.[0]; if (!f) return;
+    S.songFiles[cur().a] = URL.createObjectURL(f); toast(`🎵 '${cur().a}' 음원을 연결했어요 (이 화면을 닫기 전까지 유지)`); draw();
+  });
   ctl.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.part) { part = +b.dataset.part; draw(); bz?.draw(); }
     if ('a' in b.dataset) { showA = true; sfx.ding(); draw(); }
-    if (b.dataset.go) { idx = (idx + +b.dataset.go + items.length) % items.length; part = 1; showA = false; draw(); bz?.open(); }
+    if (b.dataset.go) { stop(); idx = (idx + +b.dataset.go + items.length) % items.length; part = 1; showA = false; draw(); bz?.open(); }
   });
   draw();
   if (items.length) bz = buzzPanel($('#bz', stage), { points: () => (part === 1 ? 3 : 1), prompt: () => `노래 ${idx + 1}` });
