@@ -1,0 +1,39 @@
+rules_version = '2';
+// 파이어베이스 콘솔 > Firestore Database > 규칙 탭에 그대로 붙여 넣고 [게시]
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 선생님 개인 자료(문제 세트, 학급 명렬): 본인(구글 로그인)만 읽고 쓰기
+    match /teachers/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // 수업 방: 로그인(익명 포함)한 사람은 읽기, 만든 선생님만 수정
+    match /rooms/{code} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.owner == request.auth.uid;
+      allow update: if request.auth != null
+                    && request.resource.data.owner == request.auth.uid
+                    && (resource.data.owner == request.auth.uid
+                        || resource.data.updatedAt < request.time - duration.value(1, 'd'));
+
+      // 학생 응답(투표·버저·참가): 학생은 자기 문서만 쓰기
+      match /{sub}/{uid} {
+        allow read: if request.auth != null && sub != 'secret';
+        allow write: if request.auth != null
+                     && sub in ['responses', 'buzz', 'members']
+                     && request.auth.uid == uid;
+      }
+
+      // 비밀 카드(마피아 역할, 라이어 제시어): 본인과 방을 만든 선생님만 읽기, 선생님만 쓰기
+      match /secret/{uid} {
+        allow read: if request.auth != null
+                    && (request.auth.uid == uid
+                        || get(/databases/$(database)/documents/rooms/$(code)).data.owner == request.auth.uid);
+        allow write: if request.auth != null
+                     && get(/databases/$(database)/documents/rooms/$(code)).data.owner == request.auth.uid;
+      }
+    }
+  }
+}
