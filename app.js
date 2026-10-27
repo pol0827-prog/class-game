@@ -133,7 +133,7 @@ function renderHome() {
   </section>
   <nav class="tabs">${tabs.map(([k, n, e]) => `<button class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}">${e} ${n}</button>`).join('')}</nav>
   <section class="grid">${list.map(cardHTML).join('')}</section>
-  <p class="foot">카드를 눌러 진행 방법과 타이머를 확인하세요 · 📱 표시가 있는 게임은 학생 휴대폰으로도 참여할 수 있어요</p>`;
+  <p class="foot">카드를 눌러 진행 방법과 타이머를 확인하세요 · 📱 표시가 있는 게임은 학생 휴대폰으로도 참여할 수 있어요<br><span class="madeby">made by 2026.10. JJI</span></p>`;
   $('#topic').oninput = (e) => { S.topic = e.target.value; LS.set('co-topic', S.topic); };
   $('#b-draw').onclick = openDraw;
   $$('.tab', home).forEach(b => b.onclick = () => { S.tab = b.dataset.tab; renderHome(); });

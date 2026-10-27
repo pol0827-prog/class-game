@@ -375,3 +375,5 @@ h1, h2, h3, .t { font-family: var(--title); font-weight: 400; letter-spacing: -.
 .ytcover { position: absolute; inset: 0; display: grid; place-items: center; font-size: 4rem; background: linear-gradient(135deg, #6C4CF5, #EE4F86); color: #fff; z-index: 2; transition: opacity .4s; }
 .ytcover.off { opacity: 0; pointer-events: none; }
 .songctl { display: grid; gap: 8px; width: 100%; }
+
+.madeby { display: inline-block; margin-top: 8px; font-size: .8rem; letter-spacing: .06em; color: var(--ink2); opacity: .8; }
