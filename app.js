@@ -549,6 +549,37 @@ function loadYT() {
 }
 S.songFiles = S.songFiles || {};
 
+// 연습용 내장 멜로디 (저작권이 없는 민요·동요, 오르골 소리로 합성)
+const NOTE = { C4: 261.6, D4: 293.7, E4: 329.6, F4: 349.2, G4: 392.0, A4: 440.0, B4: 493.9, C5: 523.3, D5: 587.3, E5: 659.3, R: 0 };
+const TUNES = {
+  star: { beat: .45, n: 'C4 1 C4 1 G4 1 G4 1 A4 1 A4 1 G4 2 F4 1 F4 1 E4 1 E4 1 D4 1 D4 1 C4 2 G4 1 G4 1 F4 1 F4 1 E4 1 E4 1 D4 2 G4 1 G4 1 F4 1 F4 1 E4 1 E4 1 D4 2 C4 1 C4 1 G4 1 G4 1 A4 1 A4 1 G4 2 F4 1 F4 1 E4 1 E4 1 D4 1 D4 1 C4 2' },
+  nabi: { beat: .42, n: 'G4 1 E4 1 E4 2 F4 1 D4 1 D4 2 C4 1 D4 1 E4 1 F4 1 G4 1 G4 1 G4 2 G4 1 E4 1 E4 2 F4 1 D4 1 D4 2 C4 1 E4 1 G4 1 G4 1 C4 4 D4 1 D4 1 D4 1 D4 1 D4 1 E4 1 F4 2 E4 1 E4 1 E4 1 E4 1 E4 1 F4 1 G4 2' },
+  arirang: { beat: .5, n: 'D4 1.5 E4 .5 D4 .5 E4 .5 G4 1.5 A4 .5 G4 .5 A4 .5 B4 1 A4 .5 B4 .5 G4 .5 A4 .5 G4 .5 E4 1.5 D4 1.5 E4 .5 D4 .5 E4 .5 G4 .5 A4 .5 B4 .5 A4 .5 G4 .5 E4 .5 G4 1.5 A4 .5 G4 .5 E4 .5 D4 3' },
+};
+let tuneCtx = null, tuneNodes = [];
+function stopTune() { tuneNodes.forEach(o => { try { o.stop(); } catch {} }); tuneNodes = []; }
+function playTune(name, startSec, dur) {
+  const T = TUNES[name]; if (!T) return false;
+  tuneCtx = tuneCtx || new (window.AudioContext || window.webkitAudioContext)(); if (tuneCtx.state === 'suspended') tuneCtx.resume();
+  stopTune();
+  const p = T.n.trim().split(/\s+/); const t0 = tuneCtx.currentTime + .05; let t = -startSec;
+  for (let i = 0; i < p.length; i += 2) {
+    const f = NOTE[p[i]], len = (+p[i + 1]) * T.beat;
+    if (t + len > 0 && t < dur && f) {
+      const on = Math.max(0, t), off = Math.min(dur, t + len);
+      [1, 2].forEach((h, k) => {
+        const o = tuneCtx.createOscillator(), g = tuneCtx.createGain();
+        o.type = k ? 'sine' : 'triangle'; o.frequency.value = f * h;
+        g.gain.setValueAtTime(0, t0 + on); g.gain.linearRampToValueAtTime(k ? .05 : .22, t0 + on + .015);
+        g.gain.exponentialRampToValueAtTime(.001, t0 + off + .25);
+        o.connect(g).connect(tuneCtx.destination); o.start(t0 + on); o.stop(t0 + off + .3); tuneNodes.push(o);
+      });
+    }
+    t += len;
+  }
+  return true;
+}
+
 MOD.song = (stage, g, items) => {
   let idx = 0, part = 1, showA = false, bz = null, player = null, playerId = '', stopT = null, audio = null;
   let clip = LS.get('co-song-clip', 5);
@@ -559,16 +590,22 @@ MOD.song = (stage, g, items) => {
   const qc = $('#qc', stage), ctl = $('#ctl', stage), sc = $('#sc', stage);
   const cur = () => items[idx];
   const start = (it) => parseSec(it.start) ?? ytInfo(it.src)?.t ?? 0;
-  function stop() { clearTimeout(stopT); try { player?.pauseVideo(); } catch {} audio?.pause(); }
+  let pendingSec = 0;
+  function stop() { clearTimeout(stopT); pendingSec = 0; stopTune(); try { player?.pauseVideo(); } catch {} audio?.pause(); }
   addClean(() => { stop(); try { player?.destroy(); } catch {} });
   async function play(sec) {
     const it = cur(); if (!it) return; stop();
     const st = start(it);
     const file = S.songFiles[it.a];
+    const tune = String(it.src || '').startsWith('tune:') ? it.src.slice(5).trim() : '';
+    if (!file && tune) { if (!playTune(tune, st, sec)) toast('내장 멜로디를 찾지 못했어요'); return; }
     if (file) {
       audio = audio || new Audio(); if (audio.src !== file) audio.src = file;
-      audio.currentTime = st; await audio.play().catch(() => toast('재생이 막혔어요. 화면을 한 번 누른 뒤 다시 눌러 주세요'));
-      stopT = setTimeout(() => audio.pause(), sec * 1000); return;
+      audio.currentTime = st;
+      // 실제로 소리가 나기 시작한 순간부터 초를 셈 (1초 재생도 정확하게)
+      audio.onplaying = () => { clearTimeout(stopT); stopT = setTimeout(() => audio.pause(), sec * 1000); };
+      await audio.play().catch(() => toast('재생이 막혔어요. 화면을 한 번 누른 뒤 다시 눌러 주세요'));
+      return;
     }
     const yi = ytInfo(it.src);
     if (!yi) { toast('이 노래에는 음원이 없어요. 유튜브 주소를 넣거나 음원 파일을 올려 주세요'); return; }
@@ -579,16 +616,18 @@ MOD.song = (stage, g, items) => {
       playerId = yi.id;
       await new Promise((res) => {
         player = new YT.Player($('#yt', stage), { videoId: yi.id, width: '100%', height: '100%', playerVars: { controls: 0, disablekb: 1, modestbranding: 1, rel: 0, playsinline: 1, start: st },
-          events: { onReady: () => res(), onError: () => { toast('이 영상은 다른 사이트에서 재생할 수 없게 막혀 있어요. 다른 영상 주소를 넣어 주세요'); res(); } } });
+          events: { onReady: () => res(), onStateChange: (ev) => { if (ev.data === 1 && pendingSec) { const d = pendingSec; pendingSec = 0; clearTimeout(stopT); stopT = setTimeout(() => { try { player.pauseVideo(); } catch {} }, d * 1000); } }, onError: () => { toast('이 영상은 다른 사이트에서 재생할 수 없게 막혀 있어요. 다른 영상 주소를 넣어 주세요'); res(); } } });
       });
     }
+    pendingSec = sec;
     try { player.seekTo(st, true); player.playVideo(); } catch {}
-    stopT = setTimeout(() => { try { player.pauseVideo(); } catch {} }, sec * 1000 + 600);
+    // 영상이 재생 상태가 되는 순간 타이머 시작 (onStateChange). 혹시 이벤트가 안 오면 대비
+    stopT = setTimeout(() => { try { player.pauseVideo(); } catch {} }, sec * 1000 + 3000);
   }
   function draw() {
     const it = cur();
     if (!it) { qc.innerHTML = '<div class="empty">노래 목록이 비어 있어요. [✏️ 내용 편집]에서 추가하세요.</div>'; return; }
-    const has = !!(S.songFiles[it.a] || ytInfo(it.src));
+    const has = !!(S.songFiles[it.a] || ytInfo(it.src) || String(it.src || '').startsWith('tune:'));
     qc.innerHTML = `<div class="counter">🎵 노래 ${idx + 1} / ${items.length}</div>
       <div class="q">${showA ? esc(it.a) : (part === 1 ? '🎧 첫 소절 듣고 맞히기' : '🎧🎧 두 소절 듣고 맞히기')}</div>
       ${showA && it.hint ? `<div class="hint">${esc(it.hint)}</div>` : `<div class="sub">${part === 1 ? '지금 맞히면 3점!' : '지금 맞히면 1점'}</div>`}`;
@@ -598,11 +637,12 @@ MOD.song = (stage, g, items) => {
         <button class="btn big" data-play="2" ${has ? '' : 'disabled'}>▶▶ 2소절 (${clip * 2}초)</button>
         <button class="btn big" data-stop>⏹</button>
       </div>
-      <div class="row" style="justify-content:center"><span class="chip">한 소절 길이</span>${[3, 5, 8, 10].map(n => `<button class="btn sm ${n === clip ? 'primary' : ''}" data-clip="${n}">${n}초</button>`).join('')}
+      <div class="row" style="justify-content:center"><span class="chip">한 소절 길이</span>${[1, 2, 3, 5, 8, 10].map(n => `<button class="btn sm ${n === clip ? 'primary' : ''}" data-clip="${n}">${n}초</button>`).join('')}
         <span class="chip">시작 ${start(it)}초</span></div>
       ${has ? '' : `<div class="help" style="text-align:center">🔇 이 노래에는 음원이 아직 없어요.<br>
         ① <a href="https://www.youtube.com/results?search_query=${encodeURIComponent(it.a + ' ' + (it.hint || ''))}" target="_blank" rel="noopener">유튜브에서 찾기</a> → 주소 복사 → [✏️ 내용 편집]에서 <b>제목 | 가수 | 유튜브 주소 | 시작 초</b>로 넣기
         &nbsp;또는 ② <label class="btn sm">🎵 음원 파일 올리기<input type="file" accept="audio/*" data-file hidden></label></div>`}
+      ${String(it.src || '').startsWith('tune:') ? '<div class="help" style="text-align:center">🎹 연습용 내장 멜로디예요. 진짜 노래는 유튜브 주소나 음원 파일로 넣어 주세요.</div>' : ''}
       ${has && !S.songFiles[it.a] ? `<div class="row" style="justify-content:center"><label class="btn sm">🎵 음원 파일로 바꾸기<input type="file" accept="audio/*" data-file hidden></label></div>` : ''}`;
     const cover = $('#ytc', stage); if (cover) cover.classList.toggle('off', showA);
     ctl.innerHTML = `<button class="btn big" data-go="-1">◀</button>
